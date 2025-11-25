@@ -4,8 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class TestLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, obj_scale, constr_scale):
         super(TestLoss, self).__init__()
+        self.s_obj = obj_scale
+        self.s_constr = constr_scale
 
 
     def forward(self, inputs):
@@ -20,5 +22,8 @@ class TestLoss(nn.Module):
         # constraint loss 
         c1_loss = l1*F.relu((sin(x1) + m1*x1 + b1 - x2))
         c2_loss = l2*F.relu((-cos(x1) - m2*x1 + b2 + x2))
+        # c1_loss = (sin(x1) + m1*x1 + b1 - x2)
+        # c2_loss = (-cos(x1) - m2*x1 + b2 + x2)
         # return sum 
-        return obj_loss + c1_loss + c2_loss
+        return self.s_obj*obj_loss + self.s_constr*(l1*c1_loss + l2*c2_loss)
+        # return obj_loss + c1_loss + c2_loss

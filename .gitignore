@@ -1,0 +1,11 @@
+# ignore compiled Python bytecode
+*.pyc
+__pycache__/
+GNNS/__pycache__/ 
+.DS_Store
+
+# ignore data files 
+datasets/*.xlsx
+
+# ignore AI setup stuff 
+wandb/

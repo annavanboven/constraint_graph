@@ -19,11 +19,11 @@ df = pd.read_excel(os.path.join(os.path.dirname(__file__), "..", 'datasets', 'ba
 
 def create_data(row):
     l1, l2 = _determine_init_violation_(row)
-    # data point has 1) label, 2) value, 3) slope, 4) intercept (for this problem)
-    point = torch.tensor([[1, 5, 0, 0],
-            [2, 5, 0, 0],
-            [3, l1, row['m1'], row['b1']],
-            [4, l2, row['m2'], row['b2']]], dtype = torch.float)
+    # data point has 1) label, 2) value, 3) slope, 4) intercept (for this problem), 5) constraint value
+    point = torch.tensor([[1, 5, 0, 0, 0],
+            [2, 5, 0, 0, 0],
+            [3, l1, row['m1'], row['b1'], l1],
+            [4, l2, row['m2'], row['b2'], l2]], dtype = torch.float)
     label = torch.tensor([[row['xopt']], [row['yopt']]], dtype=torch.float)
     data = Data(x=point, edge_index=edge_index, y = label)
     return data
@@ -68,10 +68,10 @@ edge_index = EdgeIndex(
      [2, 3, 2, 3, 0, 1, 0, 1, 0, 1, 2, 3]]
 )
 # test datapoint 
-test_point = torch.tensor([[1, 5, 0, 0],
-            [2, 5, 0, 0],
-            [3, 5, -.6573, -1.2872],
-            [4, 5, 0.7594, -2.2931]], dtype = torch.float)
+test_point = torch.tensor([[1, 4, 0, 0, 0],
+            [2, 4, 0, 0, 0],
+            [3, 0, 1, -1, 0],
+            [4, 0, 2, -2, 0]], dtype = torch.float)
 test_data = Data(x = test_point, edge_index=edge_index)
 
 #  create graph object
@@ -93,95 +93,105 @@ gnn = PDConv(constr_dict, proj_dict, indices_dict=indices_dict, num_edges=12,
 # test functions
 # feas_point: x1, x2, l1, l2 = 1, 4, 0, 0
 # infeas point: x1, x2, l1, l2 = 5, 5, 7.04, 0
-m1 = -1.09
-b1 = 3.64
-m2 = 1.26
-b2 = -3.52
-def update_funcs(x1, x2, l1, l2):
-    x1n = x1 - alpha*(1 + l1*(cos(x1) + m1) + l2*(sin(x1) - m2))
-    x2n = x2 - alpha*(3 - l1 + l2)
-    l1 += alpha*(sin(x1) + m1*x1 + b1 - x2)
-    l2 += alpha*(-1*cos(x1) - m2*x1 - b2 + x2)
-    return max(x1n, 0), max(x2n, 0), max(l1, 0), max(l2, 0)
+m1 = 1
+b1 = -1
+m2 = 2
+b2 = -2
+a = 0.9
+b = 0.1
+n_itrs = 200
+alpha = 0.05
+def update_funcs(x1, x2, l1, l2,  s1, s2, a, b):
+    # x1n = x1 - alpha*(1 + (l1 + c1)*(cos(x1) + m1) + (l2 + c2)*(sin(x1) - m2))
+    # x2n = x2 - alpha*(3 - (l1 + c1) + (l2 + c2))
+    x1n = x1 - alpha * (a + l1*(cos(x1) + m1) + l1*(sin(x1) - m2))
+    x2n = x2 - alpha * (3*a - l1 + l2)
+    s1n = s1 - alpha * (-1*b + l1 )
+    s2n = s2 - alpha * (-1 * b + l2 )
+    l1 += alpha*(sin(x1) + m1*x1 + b1 - x2 + s1)
+    l2 += alpha*(-cos(x1) - m2*x1 - b2 + x2 + s2)
+    a = max(a - 0.0025, 0.1)
+    b = min(b + 0.0025, 0.9)
+    return max(x1n, 0), max(x2n, 0), max(l1, 0), max(l2, 0),  max(s1n, 0), max(s2n, 0), a, b
 
-x1, x2, l1, l2 = 5, 5, 5, 5
-storage = [[x1, x2, l1, l2]]
+x1, x2, l1, l2,  s1, s2 = 4, 4, 2, 2,  1.76, 1.35
+storage = [[x1, x2, l1, l2,  s1, s2]]
 start_time = time.time()
 for _ in range(n_itrs):
-    x1, x2, l1, l2 = update_funcs(x1, x2, l1, l2)
-    storage.append([x1, x2, l1, l2])
-    if abs(storage[-1][0] - storage[-2][0]) + abs(storage[-1][1] - storage[-2][1]) < conv_tol:
-        break
+    x1, x2, l1, l2,  s1, s2, a, b = update_funcs(x1, x2, l1, l2,  s1, s2, a, b)
+    storage.append([x1, x2, l1, l2,  s1, s2])
+    # if abs(storage[-1][0] - storage[-2][0]) + abs(storage[-1][1] - storage[-2][1]) < conv_tol:
+    #     break
 end_time = time.time()
 baseline_time = end_time - start_time
 
 #  plot 
-#     x1s = [i[0] for i in lst]
-    # x2s = [i[1] for i in lst]
-    # l1s = [i[2] for i in lst]
-    # l2s = [i[3] for i in lst]
-    # c_list = []
-    # m1 = -1.09
-    # b1 = 3.64
-    # m2 = 1.26
-    # b2 = 3.52
-    # for (x1, x2) in zip(x1s, x2s):
-    #     if sin(x1) + m1*x1 + b1 - x2 > 0:
-    #         color = 'red'
-    #         if -1*cos(x1)  -m2*x1 + b2 + x2 > 0:
-    #             color = 'purple'
-    #     elif -1*cos(x1) -m2*x1 + b2 + x2 > 0:
-    #         color = 'blue'
-    #     else:
-    #         color = 'limegreen'
-    #     c_list.append(color)
-    # plt.scatter(range(len(x1s)), x1s, color = c_list, label = 'x1', marker = 'x')
-    # plt.scatter(range(len(x2s)), x2s, color = c_list, label = 'x2', marker = 'D')
-    # plt.plot(range(len(l1s)), l1s, color = 'red', label = 'l1',  alpha = 0.3)
-    # plt.plot(range(len(l2s)), l2s, color = 'blue', label = 'l2', alpha = 0.3)
-    # plt.legend()
-    # plt.show()
-lst = gnn.prev_vals
+lst = storage
 import matplotlib.pyplot as plt
+x1s = [i[0] for i in lst]
+x2s = [i[1] for i in lst]
+l1s = [i[2] for i in lst]
+l2s = [i[3] for i in lst]
+s1s = [i[4] for i in lst]
+s2s = [i[5] for i in lst]
+c_list = []
 
-for (i, row) in df.iterrows():
-    if i < 3:
-        continue
-    if i >= 6:
-        break
-    test_data = create_data(row)
-    output = gnn(test_data.x, test_data.edge_index)
-    lst = gnn.prev_vals
-    x1s = [i[0] for i in lst]
-    x2s = [i[1] for i in lst]
-    l1s = [i[2] for i in lst]
-    l2s = [i[3] for i in lst]
-    c_list = []
-    m1 = row['m1']
-    b1 = row['b1']
-    m2 = row['m2']
-    b2 = row['b2']
-    for (x1, x2) in zip(x1s, x2s):
-        if sin(x1) + m1*x1 + b1 - x2 > 0:
-            color = 'red'
-            if -1*cos(x1)  -m2*x1 + b2 + x2 > 0:
-                color = 'purple'
-        elif -1*cos(x1) -m2*x1 + b2 + x2 > 0:
-            color = 'blue'
-        else:
-            color = 'limegreen'
-        c_list.append(color)
-    x1opt = [row['xopt'] for _ in range(len(x1s))]
-    x2opt = [row['yopt'] for _ in range(len(x2s))]
-    plt.scatter(range(len(x1s)), x1s, color = c_list, label = 'x1', marker = 'x')
-    plt.scatter(range(len(x2s)), x2s, color = c_list, label = 'x2', marker = 'D')
-    plt.plot(range(len(x1s)), x1opt, label = 'x1opt', linestyle = '--')
-    plt.plot(range(len(x2s)), x2opt, label = 'x2opt', linestyle = ':')
-    plt.plot(range(len(l1s)), l1s, color = 'red', label = 'l1',  alpha = 0.3)
-    plt.plot(range(len(l2s)), l2s, color = 'blue', label = 'l2', alpha = 0.3)
-    plt.legend()
-    plt.show()
-    x = 10
+for (x1, x2) in zip(x1s, x2s):
+    if sin(x1) + m1*x1 + b1 - x2 > 0:
+        color = 'red'
+        if -1*cos(x1)  -m2*x1 - b2 + x2 > 0:
+            color = 'purple'
+    elif -1*cos(x1) -m2*x1 - b2 + x2 > 0:
+        color = 'blue'
+    else:
+        color = 'limegreen'
+    c_list.append(color)
+plt.scatter(range(len(x1s)), x1s, color = c_list, label = 'x1', marker = 'x',  alpha = 0.3)
+plt.scatter(range(len(x2s)), x2s, color = c_list, label = 'x2', marker = 'D',  alpha = 0.3)
+plt.plot(range(len(s1s)), s1s, color = 'red', label = 's1', linestyle = ':',  alpha = 0.3)
+plt.plot(range(len(s2s)), s2s, color = 'blue', label = 's2', linestyle = '--',  alpha = 0.3)
+plt.plot(range(len(l1s)), l1s, color = 'red', label = 'l1',  alpha = 0.3)
+plt.plot(range(len(l2s)), l2s, color = 'blue', label = 'l2', alpha = 0.3)
+plt.legend()
+plt.show()
+
+
+# for (i, row) in df.iterrows():
+#     if i >= 6:
+#         break
+#     test_data = create_data(row)
+#     output = gnn(test_data.x, test_data.edge_index)
+#     lst = gnn.prev_vals
+#     x1s = [i[0] for i in lst]
+#     x2s = [i[1] for i in lst]
+#     l1s = [i[2] for i in lst]
+#     l2s = [i[3] for i in lst]
+#     c_list = []
+#     m1 = row['m1']
+#     b1 = row['b1']
+#     m2 = row['m2']
+#     b2 = row['b2']
+#     for (x1, x2) in zip(x1s, x2s):
+#         if sin(x1) + m1*x1 + b1 - x2 > 0:
+#             color = 'red'
+#             if -1*cos(x1)  -m2*x1 - b2 + x2 > 0:
+#                 color = 'purple'
+#         elif -1*cos(x1) -m2*x1 - b2 + x2 > 0:
+#             color = 'blue'
+#         else:
+#             color = 'limegreen'
+#         c_list.append(color)
+#     x1opt = [row['xopt'] for _ in range(len(x1s))]
+#     x2opt = [row['yopt'] for _ in range(len(x2s))]
+#     plt.scatter(range(len(x1s)), x1s, color = c_list, label = 'x1', marker = 'x')
+#     plt.scatter(range(len(x2s)), x2s, color = c_list, label = 'x2', marker = 'D')
+#     plt.plot(range(len(x1s)), x1opt, label = 'x1opt', linestyle = '--')
+#     plt.plot(range(len(x2s)), x2opt, label = 'x2opt', linestyle = ':')
+#     plt.plot(range(len(l1s)), l1s, color = 'red', label = 'l1',  alpha = 0.3)
+#     plt.plot(range(len(l2s)), l2s, color = 'blue', label = 'l2', alpha = 0.3)
+#     plt.legend()
+#     plt.show()
+#     x = 10
 
 #  compare prev_vals with storage
 min_size = min(len(storage), len(gnn.prev_vals))

@@ -72,22 +72,43 @@ indices_dict = {
 }
 scale_val = 4
 
-#  create graph object
-gnn = PDConv(constr_dict, proj_dict, num_edges=12, 
-             itrs=20, alpha = 0.1, convergence_tol= 0.001, indices_dict=indices_dict, scale=scale_val)
+#  create three graph objects
+gnn1 = PDConv(constr_dict, proj_dict, num_edges=12, 
+             itrs=10, alpha = 0.1, convergence_tol= 0.001, indices_dict=indices_dict, scale=scale_val)
+gnn2 = PDConv(constr_dict, proj_dict, num_edges=12, 
+             itrs=10, alpha = 0.1, convergence_tol= 0.001, indices_dict=indices_dict, scale=scale_val)
+gnn3 = PDConv(constr_dict, proj_dict, num_edges=12, 
+             itrs=10, alpha = 0.1, convergence_tol= 0.001, indices_dict=indices_dict, scale=scale_val)
+gnn_lst = [gnn1, gnn2, gnn3]
 
-loss_obj = TestLoss()
-def train(model, train_loader, optimizer, loss_obj):
-    model.train()
+# create loss functions for each gnn
+midpoint_loss = TestLoss(obj_scale = 0, constr_scale = 1)
+boundary_loss = TestLoss(obj_scale = 0.5, constr_scale = 0.5)
+obj_loss = TestLoss(obj_scale = 1, constr_scale = 0)
+loss_lst = [midpoint_loss, boundary_loss, obj_loss]
+
+# create optimizer for each gnn
+optimizer1 = torch.optim.Adam(gnn1.parameters(), lr = 0.05)
+optimizer2 = torch.optim.Adam(gnn2.parameters(), lr = 0.05)
+optimizer3 = torch.optim.Adam(gnn3.parameters(), lr = 0.05)
+opt_lst = [optimizer1, optimizer2, optimizer3]
+
+
+def train(train_loader, model_lst, loss_lst, opt_lst):
+    for model in model_lst:
+        model.train()
     total_loss = 0
     n_dps = 0
     for (i, data) in enumerate(train_loader):
-        optimizer.zero_grad()
-        out = model(data.x, data.edge_index)
-        loss = loss_obj(out)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+        out = data.x
+        edge_index = data.edge_index
+        for (model, loss, opt) in zip(model_lst, loss_lst, opt_lst):
+            opt.zero_grad()
+            out = model(out, edge_index)
+            l = loss(out)
+            l.backward(retain_graph=True)
+            opt.step()
+            total_loss += l.item()
         n_dps += 1
     return total_loss/n_dps
 
@@ -97,25 +118,28 @@ data_list = [create_data(row) for _, row in data_df.iterrows()]
 train_data, test_data = train_test_split(data_list, test_size=0.8, random_state=42)
 train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
 test_loader = DataLoader(test_data, batch_size=1)
-# create optimizer
-optimizer = torch.optim.Adam(gnn.parameters(), lr = 0.05)
+
 # train 
-loss_lst = []
+amt_loss = []
 for epoch in range(4):
-    loss = train(gnn, train_loader, optimizer, loss_obj)
+    loss = train(train_loader, gnn_lst, loss_lst, opt_lst)
     print(f" epoch: {epoch} \t loss: {loss} \n ")
-    loss_lst.append(loss)
+    amt_loss.append(loss)
     if loss == 0:
         break
 
 
-def evaluate(model, loader):
-    model.eval()
+def evaluate(model_lst, loader):
+    for model in model_lst:
+        model.eval()
     predictions = []
     labels = []
     with torch.no_grad():
         for data in loader:
-            out = model(data.x, data.edge_index)
+            out = data.x
+            edge_index = data.edge_index
+            for model in model_lst:
+                out = model(out, edge_index)
             predictions.append([out[0][1], out[1][1]])
             labels.append(data.y.numpy())
     predictions = np.array(predictions).flatten()
@@ -124,6 +148,6 @@ def evaluate(model, loader):
     r2 = r2_score(labels, predictions)
     return mse, r2, predictions, labels
 
-mse, r2, predictions, labels = evaluate(gnn, test_loader)
+mse, r2, predictions, labels = evaluate(gnn_lst, test_loader)
 x = 10
 
