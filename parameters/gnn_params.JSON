@@ -24,7 +24,7 @@
         "values": [1, 3, 7]
     },
     "batch_size": {
-        "values": [100, 150]
+        "values": [50, 100, 150]
     },
     "model_name": {
         "values": ["feas", "feasv2"]

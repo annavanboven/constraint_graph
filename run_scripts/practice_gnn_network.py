@@ -214,11 +214,11 @@ if __name__ == '__main__':
     data_df = pd.read_excel(os.path.join(os.path.dirname(__file__), "..", 'datasets', 'base_file.xlsx'))
     data_list = [create_data(row) for _, row in data_df.iterrows()]
 
-# run sweep
-if debug_mode:
-    wb_config = TestConfig()
-    main(data_list, constr_dict, proj_dict, indices_dict, 12, 10, config = wb_config)
-else:
-    sweep_config = setup_wandb()
-    sweep_id = wandb.sweep(sweep_config, project = f'constraint_graph_test')
-    wandb.agent(sweep_id, function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 100)
+    # run sweep
+    if debug_mode:
+        wb_config = TestConfig()
+        main(data_list, constr_dict, proj_dict, indices_dict, 12, 10, config = wb_config)
+    else:
+        sweep_config = setup_wandb()
+        sweep_id = wandb.sweep(sweep_config, project = f'constraint_graph_test')
+        wandb.agent(sweep_id, function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 1000)
