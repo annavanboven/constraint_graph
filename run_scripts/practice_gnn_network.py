@@ -1,4 +1,5 @@
 import sys, os
+import argparse
 import time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from GNNS.GNN_classifier import PDConv, PDNetwork, PDFeasNetwork, PDFeasNetworkV2
@@ -210,8 +211,16 @@ indices_dict = {
 }   
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Test Constraint Graph')
+    parser.add_argument(
+        '--dataset_pth', 
+        type=str, 
+        default=os.path.join(os.path.dirname(__file__), ".."), 
+        help="path to dataset directory"
+    )
+    args = parser.parse_args()
     # pull in data
-    data_df = pd.read_excel(os.path.join(os.path.dirname(__file__), "..", 'datasets', 'base_file.xlsx'))
+    data_df = pd.read_excel(os.path.join(args.dataset_pth, 'datasets', 'base_file.xlsx'))
     data_list = [create_data(row) for _, row in data_df.iterrows()]
 
     # run sweep
