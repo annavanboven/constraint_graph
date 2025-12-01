@@ -218,6 +218,12 @@ if __name__ == '__main__':
         default=os.path.join(os.path.dirname(__file__), ".."), 
         help="path to dataset directory"
     )
+    parser.add_argument(
+        '--sweep_id', 
+        type=str, 
+        default="", 
+        help="id for wandb sweep"
+    )
     args = parser.parse_args()
     # pull in data
     data_df = pd.read_excel(os.path.join(args.dataset_pth, 'datasets', 'base_file.xlsx'))
@@ -228,6 +234,6 @@ if __name__ == '__main__':
         wb_config = TestConfig()
         main(data_list, constr_dict, proj_dict, indices_dict, 12, 10, config = wb_config)
     else:
-        sweep_config = setup_wandb()
-        sweep_id = wandb.sweep(sweep_config, project = f'constraint_graph_test')
-        wandb.agent(sweep_id, function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 1000)
+        # sweep_config = setup_wandb()
+        # sweep_id = wandb.sweep(sweep_config, project = f'constraint_graph_test')
+        wandb.agent(args.sweep_id, function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 1000)
