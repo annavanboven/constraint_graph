@@ -7,8 +7,11 @@ GNNS/__pycache__/
 # ignore data files 
 datasets/*.xlsx
 
-# ig nore output files 
+# ignore output files 
 run_scripts/*.out
 
 # ignore AI setup stuff 
 wandb/
+
+# ignore updates to sweep_id
+sweep_id.txt

@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-debug_mode = False
+debug_mode = True
 
 model_dict = {
     'feas': PDFeasNetwork,
@@ -79,7 +79,6 @@ def train(train_loader, model, loss, opt):
     total_loss = 0
     n_dps = 0
     for (i, data) in enumerate(train_loader):
-        print(f'training batch {i}')
         opt.zero_grad()
         out = model(data.x, data.edge_index, data.f_edge_index)
         l = loss(out)
@@ -153,10 +152,14 @@ def main(data_list, constr_dict, proj_dict, indices_dict, n_edges, nf_edges, con
             print(f"loss: {loss} \t num optimal: {num_optimal} \t num feas: {num_feas} \t mse: {mse} \n ")
         else:
             wandb.log({'epoch': epoch, 'loss': loss, 'num_optimal': num_optimal, 'num_feas': num_feas, 'mse': mse})
+            state = gnn.state_dict() 
+            for key, tens in state.items(): 
+                if key.split('.')[2] == 'edge_weight':
+                    wandb.log({f'{key} avg': np.mean(tens.tolist()), f' {key} min': min(tens.tolist()), f'{key} max': max(tens.tolist())})
     
     # final evaluation
     mse, r2, predictions, labels, num_optimal, num_feas = evaluate(gnn, test_loader, config.conv_tol)
-    success_criteria = num_optimal >= 0.95 * len(test_loader.dataset)
+    success_criteria = num_optimal >= 0.6 * len(test_loader.dataset)
     run_str = round(num_optimal/len(test_loader.dataset), 3)
     if success_criteria:
         # save model
@@ -236,4 +239,4 @@ if __name__ == '__main__':
     else:
         # sweep_config = setup_wandb()
         # sweep_id = wandb.sweep(sweep_config, project = f'constraint_graph_test')
-        wandb.agent(args.sweep_id, function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 1000)
+        wandb.agent(args.sweep_id, project="constraint_graph_test", entity="annavb", function = lambda: main(data_list, constr_dict, proj_dict, indices_dict, 12, 10), count = 1000)
