@@ -133,7 +133,7 @@ title_str = 'iter objective inf_pr inf_du lf(mu) ||d|| lg(rg) alpha_du alpha_pr 
 titles = title_str.split(' ')
 
 # plot against objectives 
-title = '||d||'
+title = 'alpha_du'
 title_ind = titles.index(title)
 for iter in iter_logs: 
     iterations = [x[0] for x in iter]

@@ -2,14 +2,15 @@
 import os 
 import pandas as pd
 import numpy as np 
-from pypower import  case14, runopf 
+from pypower import  case14, case6ww, runopf 
 import random 
 from pypower.idx_bus import *
 from pypower.idx_brch import *
 from pypower.idx_gen import *
-
-test_case = case14.case14()
-CASE_NAME = 'case14'
+CASE_NAME = 'case6ww'
+tc_dict = {'case14': case14.case14(),
+           'case6ww': case6ww.case6ww()}
+test_case = tc_dict[CASE_NAME]
 # %% functions 
 def perturb_gen(test_case): 
     # find number of generators to be online 
@@ -31,10 +32,12 @@ def perturb_load(test_case, maxgen, total_gen):
     perturbation = [random.uniform(1 - delta, 1) for _ in range(n_loads)]
     for perturb, bus in zip(perturbation, load_buses): 
         test_case['bus'][bus][PD] = test_case['bus'][bus][PD] * perturb 
+        test_case['bus'][bus][QD] = test_case['bus'][bus][QD] * perturb 
     while sum(test_case['bus'][load_buses, PD]) > maxgen + 0.05: 
         perturbation = [random.uniform(1 - delta, 1 + delta) for _ in range(n_loads)]
         for perturb, bus in zip(perturbation, load_buses): 
             test_case['bus'][bus][PD] = test_case['bus'][bus][PD] * perturb 
+            test_case['bus'][bus][QD] = test_case['bus'][bus][QD] * perturb 
     return test_case
 
 def parse_sample(sample_dict, result, test_case): 
@@ -52,12 +55,13 @@ def parse_sample(sample_dict, result, test_case):
         sample_dict[f'pg_{i}'].append(result['gen'][i, PG])
         sample_dict[f'qg_{i}'].append(result['gen'][i, QG])
     return sample_dict
+# %% acopf functions 
 
 # %% generate random sample 
 test_case, maxgen = perturb_gen(test_case)
 test_case = perturb_load(test_case, maxgen, sum(test_case['gen'][:, PMAX]))
 # %% generate dataset
-num_points = 10
+num_points = 10000
 base_load = test_case['bus'][:, PD].copy()
 total_gen = sum(test_case['gen'][:, PMAX])
 sample_dict = {'cost': []}

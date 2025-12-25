@@ -27,3 +27,13 @@ class TestLoss(nn.Module):
         # return sum 
         return self.s_obj*obj_loss + self.s_constr*(l1*c1_loss + l2*c2_loss)
         # return obj_loss + c1_loss + c2_loss
+
+class OPFLoss(nn.Module): 
+    def __init__(self, obj_scale, constr_scale):
+        self.obj_scale = obj_scale
+        self.constr_scale = constr_scale
+        super(OPFLoss, self).__init__() 
+    
+    def forward(self, obj_val, constr_val): 
+        return self.obj_scale * obj_val + self.constr_scale * constr_val
+
