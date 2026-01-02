@@ -21,7 +21,7 @@ from torch_geometric.loader import DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 
-debug_mode = True
+debug_mode = False
 
 model_dict = {
     'feasv3': PDFeasNetworkV3,
@@ -92,6 +92,7 @@ def evaluate(pdgnn, model, loader):
     return mse, r2, predictions, labels, num_optimal, num_feas
 
 def main(case_name, config = None): 
+    print("in main")
     model_name = 'TEST'
     if not debug_mode:
         wandb.init(config=config)
@@ -101,12 +102,14 @@ def main(case_name, config = None):
         pdgnn = load_model(case_name, config)
 
     # create data
+    print("create data")
     train_data, test_data = train_test_split(pdgnn.dataset, test_size=0.2, random_state=42)
     train_loader = DataLoader(train_data, batch_size=config.batch_size, shuffle=True)
     test_loader = DataLoader(test_data, batch_size=config.batch_size, shuffle = True)
     # create model 
+    print("create model")
     model = model_dict[config.model_name]
-    gnn = pdgnn.create_model(model, batch_size = config.batch_size, 
+    gnn = pdgnn.create_model(config.model_name, batch_size = config.batch_size, 
                              optim_lst = config.optim_lst, feas_lst = config.feas_lst, 
                              conv_tol = config.conv_tol)
     # create loss function
@@ -116,8 +119,9 @@ def main(case_name, config = None):
     optim = torch.optim.Adam(gnn.parameters(), lr = config.lr)
 
     # train model 
+    print("train model")
     for epoch in range(config.num_epochs):
-        loss = train(train_loader, gnn, obj_loss, optim)
+        loss = train(train_loader, pdgnn, gnn, obj_loss, optim)
         mse, r2, predictions, labels, num_optimal, num_feas = evaluate(pdgnn, gnn, test_loader)
         if debug_mode:
             print(f"loss: {loss} \t mse: {mse} \n ")
@@ -148,12 +152,10 @@ def load_model(case_name, config):
         pdgnn = pickle.load(f)
     # store function pointers 
     pdgnn.translate_constr_dict(pickle = False)
-    # create a model in the parent function
-    model = pdgnn.create_model('feasv3',  optim_lst = config.optim_lst,
-                            feas_lst = config.feas_lst)
-    return model
+    return pdgnn
 
 if __name__ == '__main__': 
+    print("running python script")
     parser = argparse.ArgumentParser(description='Test Constraint Graph')
     parser.add_argument(
         '--case_name', 
@@ -168,7 +170,9 @@ if __name__ == '__main__':
         help="id for wandb sweep"
     )
     args = parser.parse_args()
-    wandb.agent(args.sweep_id, project="case6ww_acopf", entity="annavb", function = lambda: main(args.case_name), count = 1000)
+    sweep_id = f"annavb/case6ww_acopf/{args.sweep_id.strip()}"
+    print(f"sweep id: {sweep_id} \n")
+    wandb.agent(sweep_id, function = lambda: main(args.case_name), count = 1000)
 
 
 
